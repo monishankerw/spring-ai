@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spring AI • 3D Chat</title>
+
+  <!-- Three.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #050816;
+      color: #fff;
+    }
+
+    #scene {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      pointer-events: none;
+    }
+
+    .card {
+      width: min(920px, 100%);
+      min-height: 560px;
+      display: flex;
+      flex-direction: column;
+      padding: 32px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 28px;
+      background: rgba(8, 13, 32, .68);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow:
+        0 30px 100px rgba(0,0,0,.55),
+        inset 0 1px 0 rgba(255,255,255,.08);
+      pointer-events: auto;
+    }
+
+    .badge {
+      width: fit-content;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(80, 150, 255, .14);
+      border: 1px solid rgba(100, 170, 255, .28);
+      color: #9cc7ff;
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 18px 0 8px;
+      font-size: clamp(34px, 6vw, 64px);
+      line-height: 1;
+      letter-spacing: -.045em;
+    }
+
+    .subtitle {
+      margin: 0 0 26px;
+      color: #aab4d0;
+      font-size: 15px;
+    }
+
+    .form {
+      display: flex;
+      gap: 12px;
+      margin-top: auto;
+    }
+
+    input {
+      flex: 1;
+      min-width: 0;
+      height: 58px;
+      padding: 0 18px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 16px;
+      outline: none;
+      color: white;
+      background: rgba(255,255,255,.07);
+      font-size: 16px;
+    }
+
+    input:focus {
+      border-color: rgba(120,180,255,.7);
+      box-shadow: 0 0 0 4px rgba(70,140,255,.10);
+    }
+
+    button {
+      height: 58px;
+      padding: 0 26px;
+      border: 0;
+      border-radius: 16px;
+      cursor: pointer;
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+      background: linear-gradient(135deg, #3b82f6, #7c3aed);
+      box-shadow: 0 12px 30px rgba(78, 93, 255, .3);
+      transition: transform .2s ease, opacity .2s ease;
+    }
+
+    button:hover { transform: translateY(-2px); }
+    button:disabled { opacity: .55; cursor: wait; transform: none; }
+
+    .result {
+      min-height: 190px;
+      max-height: 280px;
+      overflow: auto;
+      margin: 24px 0;
+      padding: 20px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.22);
+      color: #dce5ff;
+      white-space: pre-wrap;
+      line-height: 1.65;
+      font-size: 15px;
+    }
+
+    .status {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #7f8ba9;
+    }
+
+    .status.ok { color: #75e6a5; }
+    .status.error { color: #ff8d9d; }
+
+    @media (max-width: 640px) {
+      .card { padding: 22px; min-height: 520px; }
+      .form { flex-direction: column; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="overlay">
+    <main class="card">
+      <div class="badge">Spring AI • OpenAI</div>
+
+      <h1>Ask AI</h1>
+
+      <p class="subtitle">
+        3D frontend → Spring Boot → Spring AI → OpenAI
+      </p>
+
+      <div id="result" class="result">
+        Ask something to call your Spring Boot API...
+      </div>
+
+      <form id="chatForm" class="form">
+        <input
+          id="message"
+          type="text"
+          placeholder="Ask: Explain Spring AI in simple terms"
+          autocomplete="off"
+          required
+        />
+        <button id="sendButton" type="submit">Ask AI</button>
+      </form>
+
+      <div id="status" class="status">
+        API: GET /api/v1/charts/{message}
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // ============================================================
+    // 1. Three.js 3D background
+    // ============================================================
+
+    const canvas = document.getElementById("scene");
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+      60,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+
+    camera.position.z = 18;
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true
+    });
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Floating particles
+    const particleCount = 1600;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      positions[i]     = (Math.random() - 0.5) * 70;
+      positions[i + 1] = (Math.random() - 0.5) * 45;
+      positions[i + 2] = (Math.random() - 0.5) * 45;
+    }
+
+    geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(positions, 3)
+    );
+
+    const material = new THREE.PointsMaterial({
+      color: 0x6da8ff,
+      size: 0.055,
+      transparent: true,
+      opacity: 0.8
+    });
+
+    const particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+
+    // Central glowing 3D object
+    const sphereGeometry = new THREE.IcosahedronGeometry(3.2, 3);
+
+    const sphereMaterial = new THREE.MeshStandardMaterial({
+      color: 0x315cff,
+      emissive: 0x162a88,
+      emissiveIntensity: 1.4,
+      metalness: 0.65,
+      roughness: 0.22,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.48
+    });
+
+    const sphere = new THREE.Mesh(
+      sphereGeometry,
+      sphereMaterial
+    );
+
+    scene.add(sphere);
+
+    const innerGeometry = new THREE.IcosahedronGeometry(2.1, 2);
+
+    const innerMaterial = new THREE.MeshStandardMaterial({
+      color: 0x8b5cf6,
+      emissive: 0x4c1d95,
+      emissiveIntensity: 1.8,
+      metalness: 0.7,
+      roughness: 0.15,
+      transparent: true,
+      opacity: 0.25
+    });
+
+    const innerSphere = new THREE.Mesh(
+      innerGeometry,
+      innerMaterial
+    );
+
+    scene.add(innerSphere);
+
+    const light1 = new THREE.PointLight(0x438cff, 18, 30);
+    light1.position.set(5, 4, 8);
+    scene.add(light1);
+
+    const light2 = new THREE.PointLight(0x9b5cff, 14, 25);
+    light2.position.set(-6, -3, 5);
+    scene.add(light2);
+
+    let mouseX = 0;
+    let mouseY = 0;
+
+    window.addEventListener("mousemove", (event) => {
+      mouseX = (event.clientX / window.innerWidth - 0.5) * 2;
+      mouseY = (event.clientY / window.innerHeight - 0.5) * 2;
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      particles.rotation.y += 0.00035;
+      particles.rotation.x += 0.00008;
+
+      sphere.rotation.x += 0.0015;
+      sphere.rotation.y += 0.0025;
+
+      innerSphere.rotation.x -= 0.002;
+      innerSphere.rotation.y -= 0.003;
+
+      sphere.position.x += (mouseX * 1.2 - sphere.position.x) * 0.02;
+      sphere.position.y += (-mouseY * 0.8 - sphere.position.y) * 0.02;
+
+      innerSphere.position.x = sphere.position.x;
+      innerSphere.position.y = sphere.position.y;
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+
+    // ============================================================
+    // 2. Call Spring Boot API
+    // ============================================================
+
+    const form = document.getElementById("chatForm");
+    const input = document.getElementById("message");
+    const result = document.getElementById("result");
+    const status = document.getElementById("status");
+    const button = document.getElementById("sendButton");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const message = input.value.trim();
+
+      if (!message) {
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = "Thinking...";
+      result.textContent = "Calling Spring AI...";
+      status.textContent = "Sending request...";
+      status.className = "status";
+
+      try {
+        // PathVariable must be URL encoded.
+        const url =
+          "/api/v1/charts/" + encodeURIComponent(message);
+
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Accept": "text/plain"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            "API returned HTTP " + response.status
+          );
+        }
+
+        const data = await response.text();
+
+        result.textContent = data || "Empty response from AI.";
+        status.textContent = "✓ Response received from Spring AI";
+        status.className = "status ok";
+
+      } catch (error) {
+        console.error(error);
+
+        result.textContent =
+          "Unable to call the Spring Boot API.\n\n" +
+          error.message;
+
+        status.textContent =
+          "✕ API request failed";
+
+        status.className = "status error";
+
+      } finally {
+        button.disabled = false;
+        button.textContent = "Ask AI";
+      }
+    });
+  </script>
+</body>
+</html>
