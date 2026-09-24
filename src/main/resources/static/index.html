@@ -1,397 +1,667 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spring AI • 3D Chat</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Three.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <title>Spring AI • Ollama Chat</title>
 
-  <style>
-    * { box-sizing: border-box; }
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #050816;
-      color: #fff;
-    }
+        body {
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #fff;
+            overflow: hidden;
+            background:
+                    radial-gradient(circle at 20% 20%, rgba(88, 80, 236, 0.35), transparent 30%),
+                    radial-gradient(circle at 80% 80%, rgba(0, 200, 255, 0.25), transparent 30%),
+                    #050510;
+        }
 
-    #scene {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-    }
+        /* Background */
+        .background {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
 
-    .overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 2;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      pointer-events: none;
-    }
+        .circle {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(2px);
+            opacity: 0.35;
+            animation: float 8s ease-in-out infinite;
+        }
 
-    .card {
-      width: min(920px, 100%);
-      min-height: 560px;
-      display: flex;
-      flex-direction: column;
-      padding: 32px;
-      border: 1px solid rgba(255,255,255,.14);
-      border-radius: 28px;
-      background: rgba(8, 13, 32, .68);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      box-shadow:
-        0 30px 100px rgba(0,0,0,.55),
-        inset 0 1px 0 rgba(255,255,255,.08);
-      pointer-events: auto;
-    }
+        .circle.one {
+            width: 250px;
+            height: 250px;
+            background: #6c5ce7;
+            top: 5%;
+            left: 5%;
+        }
 
-    .badge {
-      width: fit-content;
-      padding: 7px 12px;
-      border-radius: 999px;
-      background: rgba(80, 150, 255, .14);
-      border: 1px solid rgba(100, 170, 255, .28);
-      color: #9cc7ff;
-      font-size: 12px;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
+        .circle.two {
+            width: 180px;
+            height: 180px;
+            background: #00d9ff;
+            bottom: 10%;
+            right: 8%;
+            animation-delay: 2s;
+        }
 
-    h1 {
-      margin: 18px 0 8px;
-      font-size: clamp(34px, 6vw, 64px);
-      line-height: 1;
-      letter-spacing: -.045em;
-    }
+        .circle.three {
+            width: 120px;
+            height: 120px;
+            background: #ff4ecd;
+            top: 50%;
+            right: 20%;
+            animation-delay: 4s;
+        }
 
-    .subtitle {
-      margin: 0 0 26px;
-      color: #aab4d0;
-      font-size: 15px;
-    }
+        @keyframes float {
+            0%, 100% {
+                transform: translate3d(0, 0, 0);
+            }
 
-    .form {
-      display: flex;
-      gap: 12px;
-      margin-top: auto;
-    }
+            50% {
+                transform: translate3d(0, -35px, 30px);
+            }
+        }
 
-    input {
-      flex: 1;
-      min-width: 0;
-      height: 58px;
-      padding: 0 18px;
-      border: 1px solid rgba(255,255,255,.13);
-      border-radius: 16px;
-      outline: none;
-      color: white;
-      background: rgba(255,255,255,.07);
-      font-size: 16px;
-    }
+        /* Main */
+        .container {
+            position: relative;
+            z-index: 2;
 
-    input:focus {
-      border-color: rgba(120,180,255,.7);
-      box-shadow: 0 0 0 4px rgba(70,140,255,.10);
-    }
+            width: min(1000px, 94%);
+            height: 92vh;
 
-    button {
-      height: 58px;
-      padding: 0 26px;
-      border: 0;
-      border-radius: 16px;
-      cursor: pointer;
-      color: white;
-      font-weight: 700;
-      font-size: 15px;
-      background: linear-gradient(135deg, #3b82f6, #7c3aed);
-      box-shadow: 0 12px 30px rgba(78, 93, 255, .3);
-      transition: transform .2s ease, opacity .2s ease;
-    }
+            margin: 4vh auto;
 
-    button:hover { transform: translateY(-2px); }
-    button:disabled { opacity: .55; cursor: wait; transform: none; }
+            display: flex;
+            flex-direction: column;
 
-    .result {
-      min-height: 190px;
-      max-height: 280px;
-      overflow: auto;
-      margin: 24px 0;
-      padding: 20px;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.22);
-      color: #dce5ff;
-      white-space: pre-wrap;
-      line-height: 1.65;
-      font-size: 15px;
-    }
+            background: rgba(15, 15, 35, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.12);
 
-    .status {
-      margin-top: 12px;
-      font-size: 12px;
-      color: #7f8ba9;
-    }
+            border-radius: 30px;
 
-    .status.ok { color: #75e6a5; }
-    .status.error { color: #ff8d9d; }
+            backdrop-filter: blur(25px);
 
-    @media (max-width: 640px) {
-      .card { padding: 22px; min-height: 520px; }
-      .form { flex-direction: column; }
-      button { width: 100%; }
-    }
-  </style>
+            box-shadow:
+                    0 30px 80px rgba(0, 0, 0, 0.55),
+                    inset 0 1px rgba(255, 255, 255, 0.08);
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            padding: 22px 28px;
+
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* 3D Orb */
+        .orb {
+            width: 55px;
+            height: 55px;
+
+            border-radius: 50%;
+
+            background:
+                    radial-gradient(circle at 30% 25%,
+                    #ffffff 0%,
+                    #9c8cff 10%,
+                    #6254e7 35%,
+                    #201d70 70%,
+                    #07071b 100%);
+
+            box-shadow:
+                    0 0 20px #665cff,
+                    0 0 60px rgba(102, 92, 255, 0.5);
+
+            animation: orb 4s ease-in-out infinite;
+        }
+
+        @keyframes orb {
+            0%, 100% {
+                transform: rotateY(0deg) translateY(0);
+            }
+
+            50% {
+                transform: rotateY(180deg) translateY(-8px);
+            }
+        }
+
+        .brand h1 {
+            font-size: 20px;
+        }
+
+        .brand span {
+            font-size: 12px;
+            color: #9d9db5;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            font-size: 13px;
+            color: #9dffbe;
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #37ff7c;
+            box-shadow: 0 0 12px #37ff7c;
+        }
+
+        /* Chat */
+        .chat {
+            flex: 1;
+
+            padding: 25px;
+
+            overflow-y: auto;
+
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .message {
+            max-width: 78%;
+
+            padding: 15px 18px;
+
+            border-radius: 18px;
+
+            line-height: 1.6;
+
+            animation: messageIn 0.35s ease;
+        }
+
+        @keyframes messageIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .bot {
+            align-self: flex-start;
+
+            background:
+                    linear-gradient(
+                            135deg,
+                            rgba(108, 92, 231, 0.25),
+                            rgba(0, 210, 255, 0.08)
+                    );
+
+            border: 1px solid rgba(108, 92, 231, 0.3);
+
+            box-shadow:
+                    10px 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .user {
+            align-self: flex-end;
+
+            background:
+                    linear-gradient(
+                            135deg,
+                            #6356e8,
+                            #4137a8
+                    );
+
+            box-shadow:
+                    10px 15px 30px rgba(55, 45, 160, 0.3);
+        }
+
+        .message-label {
+            font-size: 11px;
+            color: #aaa9c2;
+            margin-bottom: 5px;
+        }
+
+        /* Typing */
+        .typing {
+            display: none;
+            align-self: flex-start;
+
+            padding: 12px 16px;
+
+            border-radius: 15px;
+
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .typing span {
+            display: inline-block;
+
+            width: 7px;
+            height: 7px;
+
+            margin: 0 3px;
+
+            border-radius: 50%;
+
+            background: #aaa;
+
+            animation: typing 1.2s infinite;
+        }
+
+        .typing span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.5;
+            }
+
+            30% {
+                transform: translateY(-6px);
+                opacity: 1;
+            }
+        }
+
+        /* Input */
+        .input-area {
+            padding: 20px;
+
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+            display: flex;
+            gap: 12px;
+        }
+
+        .input-wrapper {
+            flex: 1;
+
+            display: flex;
+            align-items: center;
+
+            background: rgba(0, 0, 0, 0.25);
+
+            border: 1px solid rgba(255, 255, 255, 0.1);
+
+            border-radius: 18px;
+
+            padding: 0 15px;
+
+            transition: 0.3s;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: #6c5ce7;
+
+            box-shadow:
+                    0 0 20px rgba(108, 92, 231, 0.2);
+        }
+
+        #message {
+            width: 100%;
+
+            border: none;
+            outline: none;
+
+            background: transparent;
+
+            color: white;
+
+            padding: 15px 5px;
+
+            font-size: 15px;
+        }
+
+        #message::placeholder {
+            color: #77778d;
+        }
+
+        #send {
+            width: 55px;
+            height: 55px;
+
+            border: none;
+
+            border-radius: 16px;
+
+            cursor: pointer;
+
+            color: white;
+
+            font-size: 20px;
+
+            background:
+                    linear-gradient(
+                            135deg,
+                            #7165ff,
+                            #4238bd
+                    );
+
+            box-shadow:
+                    0 10px 25px rgba(80, 70, 220, 0.4);
+
+            transition: 0.25s;
+        }
+
+        #send:hover {
+            transform: translateY(-3px) scale(1.04);
+
+            box-shadow:
+                    0 15px 35px rgba(80, 70, 220, 0.55);
+        }
+
+        #send:active {
+            transform: scale(0.95);
+        }
+
+        #send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+
+            body {
+                overflow: auto;
+            }
+
+            .container {
+                height: 96vh;
+                margin: 2vh auto;
+                border-radius: 22px;
+            }
+
+            .header {
+                padding: 18px;
+            }
+
+            .chat {
+                padding: 18px;
+            }
+
+            .message {
+                max-width: 88%;
+            }
+
+            .input-area {
+                padding: 14px;
+            }
+
+            .brand h1 {
+                font-size: 16px;
+            }
+
+            .orb {
+                width: 45px;
+                height: 45px;
+            }
+        }
+    </style>
 </head>
 
 <body>
-  <canvas id="scene"></canvas>
 
-  <div class="overlay">
-    <main class="card">
-      <div class="badge">Spring AI • OpenAI</div>
+<div class="background">
+    <div class="circle one"></div>
+    <div class="circle two"></div>
+    <div class="circle three"></div>
+</div>
 
-      <h1>Ask AI</h1>
+<div class="container">
 
-      <p class="subtitle">
-        3D frontend → Spring Boot → Spring AI → OpenAI
-      </p>
+    <!-- Header -->
+    <header class="header">
 
-      <div id="result" class="result">
-        Ask something to call your Spring Boot API...
-      </div>
+        <div class="brand">
 
-      <form id="chatForm" class="form">
-        <input
-          id="message"
-          type="text"
-          placeholder="Ask: Explain Spring AI in simple terms"
-          autocomplete="off"
-          required
-        />
-        <button id="sendButton" type="submit">Ask AI</button>
-      </form>
+            <div class="orb"></div>
 
-      <div id="status" class="status">
-        API: GET /api/v1/charts/{message}
-      </div>
+            <div>
+                <h1>Spring AI • Ollama</h1>
+                <span>Llama 3.2 Local AI Assistant</span>
+            </div>
+
+        </div>
+
+        <div class="status">
+            <div class="status-dot"></div>
+            Online
+        </div>
+
+    </header>
+
+
+    <!-- Chat -->
+    <main class="chat" id="chat">
+
+        <div class="message bot">
+
+            <div class="message-label">
+                Ollama AI
+            </div>
+
+            Hello! 👋
+            <br>
+            I'm running locally using Spring AI + Ollama + Llama 3.2.
+            <br><br>
+            Ask me anything.
+        </div>
+
+        <div class="typing" id="typing">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+
     </main>
-  </div>
-
-  <script>
-    // ============================================================
-    // 1. Three.js 3D background
-    // ============================================================
-
-    const canvas = document.getElementById("scene");
-
-    const scene = new THREE.Scene();
-
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
-
-    camera.position.z = 18;
-
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: true
-    });
-
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-
-    // Floating particles
-    const particleCount = 1600;
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount * 3; i += 3) {
-      positions[i]     = (Math.random() - 0.5) * 70;
-      positions[i + 1] = (Math.random() - 0.5) * 45;
-      positions[i + 2] = (Math.random() - 0.5) * 45;
-    }
-
-    geometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(positions, 3)
-    );
-
-    const material = new THREE.PointsMaterial({
-      color: 0x6da8ff,
-      size: 0.055,
-      transparent: true,
-      opacity: 0.8
-    });
-
-    const particles = new THREE.Points(geometry, material);
-    scene.add(particles);
-
-    // Central glowing 3D object
-    const sphereGeometry = new THREE.IcosahedronGeometry(3.2, 3);
-
-    const sphereMaterial = new THREE.MeshStandardMaterial({
-      color: 0x315cff,
-      emissive: 0x162a88,
-      emissiveIntensity: 1.4,
-      metalness: 0.65,
-      roughness: 0.22,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.48
-    });
-
-    const sphere = new THREE.Mesh(
-      sphereGeometry,
-      sphereMaterial
-    );
-
-    scene.add(sphere);
-
-    const innerGeometry = new THREE.IcosahedronGeometry(2.1, 2);
-
-    const innerMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8b5cf6,
-      emissive: 0x4c1d95,
-      emissiveIntensity: 1.8,
-      metalness: 0.7,
-      roughness: 0.15,
-      transparent: true,
-      opacity: 0.25
-    });
-
-    const innerSphere = new THREE.Mesh(
-      innerGeometry,
-      innerMaterial
-    );
-
-    scene.add(innerSphere);
-
-    const light1 = new THREE.PointLight(0x438cff, 18, 30);
-    light1.position.set(5, 4, 8);
-    scene.add(light1);
-
-    const light2 = new THREE.PointLight(0x9b5cff, 14, 25);
-    light2.position.set(-6, -3, 5);
-    scene.add(light2);
-
-    let mouseX = 0;
-    let mouseY = 0;
-
-    window.addEventListener("mousemove", (event) => {
-      mouseX = (event.clientX / window.innerWidth - 0.5) * 2;
-      mouseY = (event.clientY / window.innerHeight - 0.5) * 2;
-    });
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      particles.rotation.y += 0.00035;
-      particles.rotation.x += 0.00008;
-
-      sphere.rotation.x += 0.0015;
-      sphere.rotation.y += 0.0025;
-
-      innerSphere.rotation.x -= 0.002;
-      innerSphere.rotation.y -= 0.003;
-
-      sphere.position.x += (mouseX * 1.2 - sphere.position.x) * 0.02;
-      sphere.position.y += (-mouseY * 0.8 - sphere.position.y) * 0.02;
-
-      innerSphere.position.x = sphere.position.x;
-      innerSphere.position.y = sphere.position.y;
-
-      renderer.render(scene, camera);
-    }
-
-    animate();
-
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
 
 
-    // ============================================================
-    // 2. Call Spring Boot API
-    // ============================================================
+    <!-- Input -->
+    <div class="input-area">
 
-    const form = document.getElementById("chatForm");
+        <div class="input-wrapper">
+
+            <input
+                    id="message"
+                    type="text"
+                    placeholder="Ask something..."
+                    autocomplete="off"
+            >
+
+        </div>
+
+        <button id="send">
+            ➤
+        </button>
+
+    </div>
+
+</div>
+
+
+<script>
+
     const input = document.getElementById("message");
-    const result = document.getElementById("result");
-    const status = document.getElementById("status");
-    const button = document.getElementById("sendButton");
+    const sendButton = document.getElementById("send");
+    const chat = document.getElementById("chat");
+    const typing = document.getElementById("typing");
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
 
-      const message = input.value.trim();
+    function addMessage(text, type) {
 
-      if (!message) {
-        return;
-      }
+        const message = document.createElement("div");
 
-      button.disabled = true;
-      button.textContent = "Thinking...";
-      result.textContent = "Calling Spring AI...";
-      status.textContent = "Sending request...";
-      status.className = "status";
+        message.className = "message " + type;
 
-      try {
-        // PathVariable must be URL encoded.
-        const url =
-          "/api/v1/charts/" + encodeURIComponent(message);
+        const label =
+            type === "user"
+                ? "You"
+                : "Ollama AI";
 
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Accept": "text/plain"
-          }
-        });
+        message.innerHTML = `
+            <div class="message-label">
+                ${label}
+            </div>
+            ${escapeHtml(text)}
+        `;
 
-        if (!response.ok) {
-          throw new Error(
-            "API returned HTTP " + response.status
-          );
+        chat.insertBefore(message, typing);
+
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+
+    function escapeHtml(text) {
+
+        const div = document.createElement("div");
+
+        div.textContent = text;
+
+        return div.innerHTML
+            .replace(/\n/g, "<br>");
+    }
+
+
+    async function sendMessage() {
+
+        const message = input.value.trim();
+
+        if (!message) {
+            return;
         }
 
-        const data = await response.text();
 
-        result.textContent = data || "Empty response from AI.";
-        status.textContent = "✓ Response received from Spring AI";
-        status.className = "status ok";
+        // Add user message
+        addMessage(message, "user");
 
-      } catch (error) {
-        console.error(error);
 
-        result.textContent =
-          "Unable to call the Spring Boot API.\n\n" +
-          error.message;
+        // Clear input
+        input.value = "";
 
-        status.textContent =
-          "✕ API request failed";
 
-        status.className = "status error";
+        // Disable button
+        sendButton.disabled = true;
 
-      } finally {
-        button.disabled = false;
-        button.textContent = "Ask AI";
-      }
-    });
-  </script>
+
+        // Show typing
+        typing.style.display = "block";
+
+        chat.scrollTop = chat.scrollHeight;
+
+
+        try {
+
+            const url =
+                "/api/v1/chat?message=" +
+                encodeURIComponent(message);
+
+
+            const response = await fetch(url);
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    "Server returned " + response.status
+                );
+
+            }
+
+
+            const result =
+                await response.text();
+
+
+            typing.style.display = "none";
+
+
+            addMessage(result, "bot");
+
+
+        } catch (error) {
+
+            typing.style.display = "none";
+
+
+            addMessage(
+                "❌ Error: " + error.message,
+                "bot"
+            );
+
+            console.error(error);
+
+        } finally {
+
+            sendButton.disabled = false;
+
+            input.focus();
+
+        }
+
+    }
+
+
+    // Send button
+    sendButton.addEventListener(
+        "click",
+        sendMessage
+    );
+
+
+    // Enter key
+    input.addEventListener(
+        "keydown",
+        function (event) {
+
+            if (event.key === "Enter") {
+
+                sendMessage();
+
+            }
+
+        }
+    );
+
+
+    // Focus input on page load
+    input.focus();
+
+</script>
+
 </body>
 </html>
+```

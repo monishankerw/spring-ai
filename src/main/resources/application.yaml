@@ -3,9 +3,12 @@ spring:
     name: spring-ai
 
   ai:
-    openai:
-      api-key: sk-proj-EXAMPLE_NOT_A_REAL_OPENAI_KEY_1234567890
+    model:
+      chat: ollama
+
+    ollama:
+      base-url: http://localhost:11434
       chat:
         options:
-          model: gpt-4o-mini
+          model: llama3.2
           temperature: 0.7
