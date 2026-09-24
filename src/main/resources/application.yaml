@@ -1,6 +1,8 @@
 spring:
   application:
     name: spring-ai
+server:
+  port: 8081
 
   ai:
     model:
